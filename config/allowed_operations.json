@@ -1,0 +1,82 @@
+{
+  "vm.list": {
+    "description": "List all VMs and containers in the cluster",
+    "risk_level": "low",
+    "params_required": [],
+    "params_optional": ["type"],
+    "proxmox_endpoint": "/cluster/resources",
+    "proxmox_method": "GET"
+  },
+  "vm.status": {
+    "description": "Get current status of a specific VM",
+    "risk_level": "low",
+    "params_required": ["node", "vmid"],
+    "params_optional": [],
+    "proxmox_endpoint": "/nodes/{node}/qemu/{vmid}/status/current",
+    "proxmox_method": "GET"
+  },
+  "vm.start": {
+    "description": "Start a VM",
+    "risk_level": "medium",
+    "params_required": ["node", "vmid"],
+    "params_optional": [],
+    "proxmox_endpoint": "/nodes/{node}/qemu/{vmid}/status/start",
+    "proxmox_method": "POST"
+  },
+  "vm.stop": {
+    "description": "Stop a VM (immediate/hard stop)",
+    "risk_level": "medium",
+    "params_required": ["node", "vmid"],
+    "params_optional": [],
+    "proxmox_endpoint": "/nodes/{node}/qemu/{vmid}/status/stop",
+    "proxmox_method": "POST"
+  },
+  "vm.shutdown": {
+    "description": "Gracefully shutdown a VM",
+    "risk_level": "medium",
+    "params_required": ["node", "vmid"],
+    "params_optional": ["timeout"],
+    "proxmox_endpoint": "/nodes/{node}/qemu/{vmid}/status/shutdown",
+    "proxmox_method": "POST"
+  },
+  "node.list": {
+    "description": "List all cluster nodes",
+    "risk_level": "low",
+    "params_required": [],
+    "params_optional": [],
+    "proxmox_endpoint": "/nodes",
+    "proxmox_method": "GET"
+  },
+  "node.status": {
+    "description": "Get status of a specific node",
+    "risk_level": "low",
+    "params_required": ["node"],
+    "params_optional": [],
+    "proxmox_endpoint": "/nodes/{node}/status",
+    "proxmox_method": "GET"
+  },
+  "storage.list": {
+    "description": "List all storage resources",
+    "risk_level": "low",
+    "params_required": [],
+    "params_optional": [],
+    "proxmox_endpoint": "/cluster/storage",
+    "proxmox_method": "GET"
+  },
+  "backup.list": {
+    "description": "List scheduled backups",
+    "risk_level": "low",
+    "params_required": [],
+    "params_optional": [],
+    "proxmox_endpoint": "/cluster/backup",
+    "proxmox_method": "GET"
+  },
+  "backup.status": {
+    "description": "Get backup content status",
+    "risk_level": "low",
+    "params_required": ["node", "storage"],
+    "params_optional": [],
+    "proxmox_endpoint": "/nodes/{node}/storage/{storage}/content",
+    "proxmox_method": "GET"
+  }
+}

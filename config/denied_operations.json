@@ -1,0 +1,33 @@
+{
+  "denied_operations": [
+    "vm.delete",
+    "vm.destroy",
+    "vm.remove",
+    "vm.create",
+    "vm.modify",
+    "vm.reset",
+    "node.stop",
+    "node.reboot",
+    "node.shutdown",
+    "cluster.aclmodify",
+    "cluster.aclcreate",
+    "cluster.acldelete",
+    "user.create",
+    "user.modify",
+    "user.delete",
+    "pool.create",
+    "pool.modify",
+    "pool.delete",
+    "storage.create",
+    "storage.modify",
+    "storage.delete",
+    "vzdump.restore",
+    "vzdump.backup"
+  ],
+  "denied_resources": [
+    "/cluster/acl*",
+    "/access/*",
+    "/pool/*"
+  ],
+  "description": "Operations and resources that are always blocked for security reasons"
+}
