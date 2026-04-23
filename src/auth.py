@@ -4,7 +4,7 @@ Authentication and Authorization Module for Proxmox MCP Server
 
 import os
 import json
-import jwt
+from jose import jwt
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
