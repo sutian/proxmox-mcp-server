@@ -42,11 +42,11 @@ services:
       - ALL
 
     # User (must match Dockerfile)
-    user: "1000:1000"
+    user: 1000:1000
 
     # Health check
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').status_code == 200"]
+      test: [CMD, python, -c, import httpx; httpx.get('http://localhost:8000/health').status_code == 200]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -54,8 +54,8 @@ services:
 
     # Labels for monitoring
     labels:
-      - "mcp.service=proxmox"
-      - "mcp.version=${MCP_VERSION:-1.0.0}"
+      - mcp.service=proxmox
+      - mcp.version=${MCP_VERSION:-1.0.0}
 
   # Optional: nginx reverse proxy with TLS
   # nginx-proxy:
