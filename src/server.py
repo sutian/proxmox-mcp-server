@@ -13,8 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 
-from auth import verify_token, verify_proxmox_access, create_token, log_auth_event as auth_log
-from proxmox_client import ProxmoxClient
+from .auth import verify_token, verify_proxmox_access, create_token, log_auth_event as auth_log
+from .proxmox_client import ProxmoxClient
 
 # Configuration
 class Settings(BaseSettings):
