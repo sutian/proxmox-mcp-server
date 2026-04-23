@@ -17,6 +17,9 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - ALLOWED_OPERATIONS=${ALLOWED_OPERATIONS:-vm.list,vm.status,vm.start,vm.stop,vm.shutdown,node.list,node.status,storage.list,backup.list,backup.status}
 
+    ports:
+      - "8000:8000"
+
     networks:
       - mcp-network
 
