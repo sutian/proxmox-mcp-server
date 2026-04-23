@@ -8,12 +8,9 @@ services:
     container_name: proxmox-mcp
     restart: unless-stopped
 
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
+    # Resource limits (use standard compose keys, not deploy:)
+    cpu_percent: 50
+    mem_limit: 256M
 
     environment:
       - PROXMOX_HOST=${PROXMOX_HOST}
@@ -46,7 +43,7 @@ services:
 
     # Health check
     healthcheck:
-      test: [CMD, python, -c, import httpx; httpx.get('http://localhost:8000/health').status_code == 200]
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').status_code == 200"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -56,20 +53,6 @@ services:
     labels:
       - mcp.service=proxmox
       - mcp.version=${MCP_VERSION:-1.0.0}
-
-  # Optional: nginx reverse proxy with TLS
-  # nginx-proxy:
-  #   image: nginx:alpine
-  #   container_name: proxmox-mcp-proxy
-  #   ports:
-  #     - "8443:443"
-  #   volumes:
-  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
-  #     - ./certs:/certs:ro
-  #   depends_on:
-  #     - proxmox-mcp
-  #   networks:
-  #     - mcp-network
 
 networks:
   mcp-network:
