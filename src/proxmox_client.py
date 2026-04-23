@@ -68,6 +68,16 @@ OPERATION_ENDPOINTS = {
         "path": "/nodes/{node}/qemu/{vmid}/pending",
         "params": {}
     },
+    "vm.create": {
+        "method": "POST",
+        "path": "/nodes/{node}/qemu",
+        "params": {}
+    },
+    "vm.clone": {
+        "method": "POST",
+        "path": "/nodes/{node}/qemu/{vmid}/clone",
+        "params": {}
+    },
     
     # Node operations
     "node.list": {

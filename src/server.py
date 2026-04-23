@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     jwt_secret: str = os.getenv("JWT_SECRET", "")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     allowed_operations: str = os.getenv("ALLOWED_OPERATIONS",
-        "vm.list,vm.status,vm.start,vm.stop,vm.shutdown,node.list,node.status,storage.list,backup.list,backup.status")
+        "vm.list,vm.status,vm.start,vm.stop,vm.shutdown,vm.create,vm.clone,node.list,node.status,storage.list,backup.list,backup.status")
 
     class Config:
         env_file = ".env"
@@ -51,7 +51,6 @@ app = FastAPI(
 TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:8000",
-    # Add your trusted frontend origins here
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -87,15 +86,20 @@ class HealthResponse(BaseModel):
     timestamp: str
     version: str
 
-# Denied operations blacklist
+# Denied operations blacklist (always blocked)
 DENIED_OPS = frozenset({
-    "vm.delete", "vm.destroy", "vm.remove", "vm.create", "vm.modify", "vm.reset",
+    "vm.delete", "vm.destroy", "vm.remove",
     "node.stop", "node.reboot", "node.shutdown",
     "cluster.aclmodify", "cluster.aclcreate", "cluster.acldelete",
     "user.modify", "user.delete", "user.create",
     "pool.modify", "pool.delete", "pool.create",
     "storage.modify", "storage.delete", "storage.create",
     "vzdump.restore", "vzdump.backup"
+})
+
+# Admin-only operations (allowed but requires admin role)
+ADMIN_ONLY_OPS = frozenset({
+    "vm.create", "vm.clone", "vm.modify", "vm.reset",
 })
 
 # Parse allowed operations
@@ -106,6 +110,7 @@ ALLOWED_OPS = frozenset(
 
 logger.info(f"Allowed operations: {ALLOWED_OPS}")
 logger.info(f"Denied operations: {DENIED_OPS}")
+logger.info(f"Admin-only operations: {ADMIN_ONLY_OPS}")
 
 # ============================================================
 # Authentication Endpoints
@@ -179,23 +184,15 @@ async def mcp_call(
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     user_id = claims.get("sub", "unknown")
-    logger.info(f"MCP call from user '{user_id}': method={request.method}")
+    user_role = claims.get("role", "viewer")
+    logger.info(f"MCP call from user '{user_id}' (role={user_role}): method={request.method}")
 
-    # Check DENIED_OPS blacklist (from denied_operations.json)
-    denied_configured = frozenset({
-        "vm.delete", "vm.destroy", "vm.remove", "vm.create", "vm.modify", "vm.reset",
-        "node.stop", "node.reboot", "node.shutdown",
-        "cluster.aclmodify", "cluster.aclcreate", "cluster.acldelete",
-        "user.modify", "user.delete", "user.create",
-        "pool.modify", "pool.delete", "pool.create",
-        "storage.modify", "storage.delete", "storage.create",
-        "vzdump.restore", "vzdump.backup"
-    })
-
-    if request.method in DENIED_OPS or request.method in denied_configured:
+    # 1. Check DENIED_OPS blacklist
+    if request.method in DENIED_OPS:
         logger.warning(f"Blocked denied operation: {request.method}")
         raise HTTPException(status_code=403, detail=f"Operation '{request.method}' is prohibited")
 
+    # 2. Check operation whitelist
     if request.method not in ALLOWED_OPS:
         logger.warning(f"Operation not allowed: {request.method}")
         raise HTTPException(
@@ -203,10 +200,17 @@ async def mcp_call(
             detail=f"Operation '{request.method}' not allowed. Allowed: {list(ALLOWED_OPS)}"
         )
 
+    # 3. Check admin-only operations
+    if request.method in ADMIN_ONLY_OPS and user_role != "admin":
+        logger.warning(f"Admin-only operation '{request.method}' blocked for role '{user_role}'")
+        raise HTTPException(status_code=403, detail=f"Operation '{request.method}' requires admin role")
+
+    # 4. Verify resource access
     if not verify_proxmox_access(claims, request.resource):
         logger.warning(f"Access denied to resource '{request.resource}' for user '{user_id}'")
         raise HTTPException(status_code=403, detail="Access denied to this resource")
 
+    # 5. Execute via Proxmox client
     try:
         client = ProxmoxClient(
             host=settings.proxmox_host,
@@ -241,8 +245,10 @@ async def list_operations(authorization: str = Header(None)):
     return {
         "allowed": sorted(list(ALLOWED_OPS)),
         "denied": sorted(list(DENIED_OPS)),
+        "admin_only": sorted(list(ADMIN_ONLY_OPS)),
         "total_allowed": len(ALLOWED_OPS),
-        "total_denied": len(DENIED_OPS)
+        "total_denied": len(DENIED_OPS),
+        "total_admin_only": len(ADMIN_ONLY_OPS)
     }
 
 # ============================================================
@@ -284,11 +290,13 @@ async def root():
     }
 
 # ============================================================
-# Authentication & RBAC Implementation (PRODUCTION: replace with LDAP/DB)
+# Authentication & RBAC Implementation
+# PRODUCTION: Replace _USER_DB with LDAP/OAuth2/DB
 # ============================================================
 
-# In-memory user store - REPLACE with real authentication in production!
-# Users and passwords should be stored in LDAP, database, or OAuth2 provider
+# In-memory user store
+# Set passwords via environment variables:
+#   ADMIN_PASSWORD, OPERATOR_PASSWORD, VIEWER_PASSWORD
 _USER_DB = {
     "admin":    {"password": os.getenv("ADMIN_PASSWORD", ""),    "role": "admin",    "resources": ["*"]},
     "operator": {"password": os.getenv("OPERATOR_PASSWORD", ""), "role": "operator", "resources": ["*/qemu/*", "*/node/*", "*/storage/*"]},
