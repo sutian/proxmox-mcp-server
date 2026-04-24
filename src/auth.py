@@ -5,6 +5,7 @@ Authentication and Authorization Module for Proxmox MCP Server
 import os
 import json
 from jose import jwt
+from jose.exceptions import JWTError
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
@@ -96,7 +97,7 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
     except jwt.ExpiredSignatureError:
         logger.warning("Token expired")
         return None
-    except jwt.InvalidTokenError as e:
+    except JWTError as e:
         logger.warning(f"Invalid token: {str(e)}")
         return None
 
