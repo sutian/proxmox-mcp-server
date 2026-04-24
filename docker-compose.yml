@@ -14,8 +14,11 @@ services:
       - PROXMOX_TOKEN_ID=${PROXMOX_TOKEN_ID}
       - PROXMOX_TOKEN_SECRET=${PROXMOX_TOKEN_SECRET}
       - JWT_SECRET=${JWT_SECRET}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - OPERATOR_PASSWORD=${OPERATOR_PASSWORD}
+      - VIEWER_PASSWORD=${VIEWER_PASSWORD}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - ALLOWED_OPERATIONS=${ALLOWED_OPERATIONS:-vm.list,vm.status,vm.start,vm.stop,vm.shutdown,node.list,node.status,storage.list,backup.list,backup.status}
+      - ALLOWED_OPERATIONS=${ALLOWED_OPERATIONS:-vm.list,vm.status,vm.start,vm.stop,vm.shutdown,vm.create,vm.clone,node.list,node.status,storage.list,backup.list,backup.status}
 
     ports:
       - "8000:8000"
