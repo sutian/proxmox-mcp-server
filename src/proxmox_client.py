@@ -79,6 +79,11 @@ OPERATION_ENDPOINTS = {
         "path": "/nodes/{node}/qemu/{vmid}/clone",
         "params": {}
     },
+    "vm.snapshot": {
+        "method": "GET",
+        "path": "/nodes/{node}/qemu/{vmid}/snapshot",
+        "params": {}
+    },
     
     # Node operations
     "node.list": {

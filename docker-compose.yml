@@ -19,7 +19,7 @@ services:
       - VIEWER_PASSWORD=${VIEWER_PASSWORD}
       - VERIFY_TLS=${VERIFY_TLS:-false}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - ALLOWED_OPERATIONS=${ALLOWED_OPERATIONS:-vm.list,vm.status,vm.start,vm.stop,vm.shutdown,vm.create,vm.clone,node.list,node.status,storage.list,backup.list,backup.status}
+      - ALLOWED_OPERATIONS=${ALLOWED_OPERATIONS:-vm.list,vm.status,vm.start,vm.stop,vm.shutdown,vm.create,vm.clone,vm.snapshot,node.list,node.status,storage.list,backup.list,backup.status}
 
     ports:
       - "8000:8000"
