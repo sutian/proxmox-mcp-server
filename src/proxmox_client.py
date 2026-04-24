@@ -310,8 +310,8 @@ class ProxmoxClient:
                     status_code=408,
                     message="Request timeout"
                 )
-            except (httpx.TLSError, ssl.SSLError) as e:
-                logger.error(f"TLS error: {str(e)}")
+            except ssl.SSLError as e:
+                logger.error(f"TLS/SSL error: {str(e)}")
                 raise ProxmoxAPIError(
                     status_code=495,
                     message=f"TLS error: {str(e)}"
