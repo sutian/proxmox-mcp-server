@@ -3,6 +3,7 @@ Proxmox API Client with TLS and Error Handling
 """
 
 import os
+import ssl
 import httpx
 import logging
 from typing import Optional, Dict, Any, List
@@ -309,7 +310,7 @@ class ProxmoxClient:
                     status_code=408,
                     message="Request timeout"
                 )
-            except httpx.TLSError as e:
+            except (httpx.TLSError, ssl.SSLError) as e:
                 logger.error(f"TLS error: {str(e)}")
                 raise ProxmoxAPIError(
                     status_code=495,
