@@ -19,160 +19,160 @@ OPERATION_ENDPOINTS = {
     # VM operations
     "vm.list": {
         "method": "GET",
-        "path": "/nodes/pve13/qemu",
+        "path": "nodes/pve13/qemu",
         "params": {}
     },
     "vm.status": {
         "method": "GET",
-        "path": "/nodes/{node}/qemu/{vmid}/status/current",
+        "path": "nodes/{node}/qemu/{vmid}/status/current",
         "params": {}
     },
     "vm.start": {
         "method": "POST",
-        "path": "/nodes/{node}/qemu/{vmid}/status/start",
+        "path": "nodes/{node}/qemu/{vmid}/status/start",
         "params": {}
     },
     "vm.stop": {
         "method": "POST",
-        "path": "/nodes/{node}/qemu/{vmid}/status/stop",
+        "path": "nodes/{node}/qemu/{vmid}/status/stop",
         "params": {}
     },
     "vm.shutdown": {
         "method": "POST",
-        "path": "/nodes/{node}/qemu/{vmid}/status/shutdown",
+        "path": "nodes/{node}/qemu/{vmid}/status/shutdown",
         "params": {}
     },
     "vm.suspend": {
         "method": "POST",
-        "path": "/nodes/{node}/qemu/{vmid}/status/suspend",
+        "path": "nodes/{node}/qemu/{vmid}/status/suspend",
         "params": {}
     },
     "vm.reset": {
         "method": "POST",
-        "path": "/nodes/{node}/qemu/{vmid}/status/reset",
+        "path": "nodes/{node}/qemu/{vmid}/status/reset",
         "params": {}
     },
     "vm.reboot": {
         "method": "POST",
-        "path": "/nodes/{node}/qemu/{vmid}/status/reboot",
+        "path": "nodes/{node}/qemu/{vmid}/status/reboot",
         "params": {}
     },
     
     # VM configuration (read-only in this implementation)
     "vm.config": {
         "method": "GET",
-        "path": "/nodes/{node}/qemu/{vmid}/config",
+        "path": "nodes/{node}/qemu/{vmid}/config",
         "params": {}
     },
     "vm.pending": {
         "method": "GET",
-        "path": "/nodes/{node}/qemu/{vmid}/pending",
+        "path": "nodes/{node}/qemu/{vmid}/pending",
         "params": {}
     },
     "vm.create": {
         "method": "POST",
-        "path": "/nodes/{node}/qemu",
+        "path": "nodes/{node}/qemu",
         "params": {}
     },
     "vm.clone": {
         "method": "POST",
-        "path": "/nodes/{node}/qemu/{vmid}/clone",
+        "path": "nodes/{node}/qemu/{vmid}/clone",
         "params": {}
     },
     
     # Node operations
     "node.list": {
         "method": "GET",
-        "path": "/nodes",
+        "path": "nodes",
         "params": {}
     },
     "node.status": {
         "method": "GET",
-        "path": "/nodes/{node}/status",
+        "path": "nodes/{node}/status",
         "params": {}
     },
     "node.resources": {
         "method": "GET",
-        "path": "/nodes/{node}/status",
+        "path": "nodes/{node}/status",
         "params": {}
     },
     "node.vms": {
         "method": "GET",
-        "path": "/nodes/{node}/qemu",
+        "path": "nodes/{node}/qemu",
         "params": {}
     },
     
     # Storage operations
     "storage.list": {
         "method": "GET",
-        "path": "/cluster/storage",
+        "path": "cluster/storage",
         "params": {}
     },
     "storage.status": {
         "method": "GET",
-        "path": "/nodes/{node}/storage/{storage}/status",
+        "path": "nodes/{node}/storage/{storage}/status",
         "params": {}
     },
     
     # Backup operations
     "backup.list": {
         "method": "GET",
-        "path": "/cluster/backup",
+        "path": "cluster/backup",
         "params": {}
     },
     "backup.status": {
         "method": "GET",
-        "path": "/nodes/{node}/storage/{storage}/content",
+        "path": "nodes/{node}/storage/{storage}/content",
         "params": {"type": "backup"}
     },
     
     # Cluster operations
     "cluster.status": {
         "method": "GET",
-        "path": "/cluster/status",
+        "path": "cluster/status",
         "params": {}
     },
     "cluster.resources": {
         "method": "GET",
-        "path": "/cluster/resources",
+        "path": "cluster/resources",
         "params": {}
     },
     "cluster.config": {
         "method": "GET",
-        "path": "/cluster/config",
+        "path": "cluster/config",
         "params": {}
     },
     
     # Network operations
     "network.list": {
         "method": "GET",
-        "path": "/nodes/{node}/network",
+        "path": "nodes/{node}/network",
         "params": {}
     },
     
     # DNS operations
     "dns.list": {
         "method": "GET",
-        "path": "/nodes/{node}/dns",
+        "path": "nodes/{node}/dns",
         "params": {}
     },
     
     # Firewall operations
     "firewall.rules": {
         "method": "GET",
-        "path": "/nodes/{node}/qemu/{vmid}/firewall/rules",
+        "path": "nodes/{node}/qemu/{vmid}/firewall/rules",
         "params": {}
     },
     
     # Version/info
     "version": {
         "method": "GET",
-        "path": "/version",
+        "path": "version",
         "params": {}
     },
     "cluster.acl": {
         "method": "GET",
-        "path": "/cluster/acl",
+        "path": "cluster/acl",
         "params": {}
     }
 }
