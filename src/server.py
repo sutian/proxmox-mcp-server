@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     proxmox_token_secret: str = os.getenv("PROXMOX_TOKEN_SECRET", "")
     jwt_secret: str = os.getenv("JWT_SECRET", "")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
+    verify_tls: bool = os.getenv("VERIFY_TLS", "true").lower() == "true"
     allowed_operations: str = os.getenv("ALLOWED_OPERATIONS",
         "vm.list,vm.status,vm.start,vm.stop,vm.shutdown,vm.create,vm.clone,node.list,node.status,storage.list,backup.list,backup.status")
 
@@ -217,7 +218,7 @@ async def mcp_call(
             port=settings.proxmox_port,
             token_id=settings.proxmox_token_id,
             token_secret=settings.proxmox_token_secret,
-            verify_tls=True
+            verify_tls=settings.verify_tls
         )
 
         result = await client.execute(request.method, request.params)
