@@ -149,16 +149,16 @@ def build_node_registry() -> dict:
 
     return registry
 
-# Global registry
-NODE_REGISTRY = build_node_registry()
-AVAILABLE_NODES = list(NODE_REGISTRY.keys())
-
-# Logging
+# Logging - must be before build_node_registry() is called
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper()),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("proxmox-mcp")
+
+# Global registry (after logger is defined)
+NODE_REGISTRY = build_node_registry()
+AVAILABLE_NODES = list(NODE_REGISTRY.keys())
 
 # FastAPI app
 app = FastAPI(
