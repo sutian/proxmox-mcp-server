@@ -52,11 +52,9 @@ def parse_proxmox_nodes(nodes_str: str) -> dict:
             name, host, port = parts
             port = int(port)
         else:
-            logger.warning(f"Invalid node entry ignored: {entry}")
             continue
 
         nodes[name] = NodeConfig(name=name, host=host, port=port)
-        logger.info(f"Parsed node '{name}' -> {host}:{port}")
 
     return nodes
 
@@ -86,6 +84,13 @@ class Settings(BaseSettings):
         extra = "ignore"
 
 settings = Settings()
+
+# Logging - must be before build_node_registry()
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper()),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("proxmox-mcp")
 
 # ============================================================
 # Node Registry - Build client per node
@@ -149,14 +154,7 @@ def build_node_registry() -> dict:
 
     return registry
 
-# Logging - must be before build_node_registry() is called
-logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper()),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger("proxmox-mcp")
-
-# Global registry (after logger is defined)
+# Global registry
 NODE_REGISTRY = build_node_registry()
 AVAILABLE_NODES = list(NODE_REGISTRY.keys())
 
@@ -358,7 +356,7 @@ async def mcp_call(
         return MCPResponse(success=True, data=result, operation=request.method)
 
     except Exception as e:
-        logger.error(f"Operation '{request.method}' failed: {str(e)}")
+        logger.error(f"Operation '{request.method}' on node '{target_node}' failed: {str(e)}")
         return MCPResponse(success=False, error=str(e), operation=request.method)
 
 @app.get("/mcp/v1/operations", tags=["MCP"])
@@ -512,7 +510,7 @@ async def startup_event():
     logger.info(f"Version: 1.1.0 (Multi-Host Support)")
     logger.info(f"Available nodes: {AVAILABLE_NODES}")
     logger.info(f"Allowed operations: {len(ALLOWED_OPS)}")
-    
+
     if not settings.jwt_secret:
         logger.error("JWT_SECRET not configured!")
     if not settings.proxmox_token_id and not settings.proxmox_node_tokens:
