@@ -9,6 +9,7 @@ A secure Model Context Protocol (MCP) server for managing Proxmox VE infrastruct
 - 🔒 TLS encrypted communication with Proxmox API
 - 📦 Docker deployment with security hardening
 - 📝 Audit logging for all operations
+- 🌐 **Multi-Host Support** - Manage multiple Proxmox nodes from a single server
 
 ## Quick Start
 
@@ -59,11 +60,10 @@ Required environment variables:
 
 | Variable | Description |
 |----------|-------------|
-| `PROXMOX_HOST` | Proxmox host IP or FQDN |
-| `PROXMOX_PORT` | API port (default: 8006) |
-| `PROXMOX_TOKEN_ID` | Token ID from step above |
-| `PROXMOX_TOKEN_SECRET` | Token secret from step above |
-| `JWT_SECRET` | Secret for signing JWT tokens (min 32 chars) |
+| `PROXMOX_NODES` | Multi-host config (node:host:port,...) |
+| `PROXMOX_TOKEN_ID` | API token ID |
+| `PROXMOX_TOKEN_SECRET` | API token secret |
+| `JWT_SECRET` | JWT signing secret (min 32 chars) |
 
 ### 4. Deploy
 

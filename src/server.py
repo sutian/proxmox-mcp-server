@@ -16,12 +16,65 @@ from pydantic_settings import BaseSettings
 from .auth import verify_token, verify_proxmox_access, create_token, log_auth_event as auth_log
 from .proxmox_client import ProxmoxClient
 
-# Configuration
+# ============================================================
+# Configuration - Multi-Host Support
+# ============================================================
+
+class NodeConfig(BaseModel):
+    """Configuration for a single Proxmox node."""
+    name: str
+    host: str
+    port: int = 8006
+
+def parse_proxmox_nodes(nodes_str: str) -> dict:
+    """
+    Parse PROXMOX_NODES into dict of NodeConfig.
+
+    Format: node_name:host:port,node_name:host:port
+    Example: pve11:192.168.1.11:8006,pve12:192.168.1.12:8006
+
+    Port defaults to 8006 if not specified.
+    """
+    if not nodes_str:
+        return {}
+
+    nodes = {}
+    for entry in nodes_str.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+
+        parts = entry.split(":")
+        if len(parts) == 2:
+            name, host = parts
+            port = 8006
+        elif len(parts) == 3:
+            name, host, port = parts
+            port = int(port)
+        else:
+            logger.warning(f"Invalid node entry ignored: {entry}")
+            continue
+
+        nodes[name] = NodeConfig(name=name, host=host, port=port)
+        logger.info(f"Parsed node '{name}' -> {host}:{port}")
+
+    return nodes
+
 class Settings(BaseSettings):
+    # Multi-host: comma-separated node configs (node:host:port)
+    proxmox_nodes: str = os.getenv("PROXMOX_NODES", "")
+
+    # Legacy single-host (for backward compatibility)
     proxmox_host: str = os.getenv("PROXMOX_HOST", "")
     proxmox_port: int = int(os.getenv("PROXMOX_PORT", "8006"))
+
+    # Shared token (used if per-node token not set)
     proxmox_token_id: str = os.getenv("PROXMOX_TOKEN_ID", "")
     proxmox_token_secret: str = os.getenv("PROXMOX_TOKEN_SECRET", "")
+
+    # Per-node token overrides (optional): node_name=token_id:token_secret,...
+    proxmox_node_tokens: str = os.getenv("PROXMOX_NODE_TOKENS", "")
+
     jwt_secret: str = os.getenv("JWT_SECRET", "")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     verify_tls: bool = os.getenv("VERIFY_TLS", "true").lower() == "true"
@@ -34,6 +87,72 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+# ============================================================
+# Node Registry - Build client per node
+# ============================================================
+
+def build_node_registry() -> dict:
+    """
+    Build a registry of Proxmox clients, one per node.
+
+    Resolution order for credentials:
+    1. Per-node token override (PROXMOX_NODE_TOKENS)
+    2. Shared token (PROXMOX_TOKEN_ID/SECRET)
+    """
+    registry = {}
+
+    # Parse multi-host config
+    if settings.proxmox_nodes:
+        node_configs = parse_proxmox_nodes(settings.proxmox_nodes)
+    elif settings.proxmox_host:
+        # Fallback to legacy single-host
+        node_configs = {"default": NodeConfig(name="default", host=settings.proxmox_host, port=settings.proxmox_port)}
+    else:
+        logger.warning("No Proxmox nodes configured (PROXMOX_NODES or PROXMOX_HOST)")
+        node_configs = {}
+
+    # Parse per-node token overrides
+    node_token_overrides = {}
+    if settings.proxmox_node_tokens:
+        for entry in settings.proxmox_node_tokens.split(","):
+            entry = entry.strip()
+            if not entry or "=" not in entry:
+                continue
+            node_name, token_pair = entry.split("=", 1)
+            if ":" in token_pair:
+                token_id, token_secret = token_pair.split(":", 1)
+                node_token_overrides[node_name.strip()] = {
+                    "token_id": token_id.strip(),
+                    "token_secret": token_secret.strip()
+                }
+
+    # Build client for each node
+    for node_name, node_config in node_configs.items():
+        if node_name in node_token_overrides:
+            token_id = node_token_overrides[node_name]["token_id"]
+            token_secret = node_token_overrides[node_name]["token_secret"]
+        else:
+            token_id = settings.proxmox_token_id
+            token_secret = settings.proxmox_token_secret
+
+        registry[node_name] = {
+            "config": node_config,
+            "client": ProxmoxClient(
+                host=node_config.host,
+                port=node_config.port,
+                token_id=token_id,
+                token_secret=token_secret,
+                verify_tls=settings.verify_tls
+            )
+        }
+        logger.info(f"Registered node '{node_name}' -> {node_config.host}:{node_config.port}")
+
+    return registry
+
+# Global registry
+NODE_REGISTRY = build_node_registry()
+AVAILABLE_NODES = list(NODE_REGISTRY.keys())
+
 # Logging
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper()),
@@ -44,8 +163,8 @@ logger = logging.getLogger("proxmox-mcp")
 # FastAPI app
 app = FastAPI(
     title="Proxmox MCP Server",
-    description="Secure MCP server for Proxmox VE management",
-    version="1.0.0"
+    description="Secure MCP server for Proxmox VE management (Multi-Host)",
+    version="1.1.0"
 )
 
 # CORS - restricted to known origins (NEVER use "*" in production)
@@ -86,6 +205,7 @@ class HealthResponse(BaseModel):
     status: str
     timestamp: str
     version: str
+    nodes: list[str] = []
 
 # Denied operations blacklist (always blocked)
 DENIED_OPS = frozenset({
@@ -211,19 +331,29 @@ async def mcp_call(
         logger.warning(f"Access denied to resource '{request.resource}' for user '{user_id}'")
         raise HTTPException(status_code=403, detail="Access denied to this resource")
 
-    # 5. Execute via Proxmox client
+    # 5. Determine target node (resolve from params.node)
+    target_node = request.params.get("node") if request.params else None
+    if not target_node:
+        if AVAILABLE_NODES:
+            target_node = AVAILABLE_NODES[0]
+            logger.debug(f"No target node specified, defaulting to '{target_node}'")
+        else:
+            raise HTTPException(status_code=503, detail="No Proxmox nodes configured")
+    elif target_node not in NODE_REGISTRY:
+        raise HTTPException(status_code=400, detail=f"Unknown node '{target_node}'. Available: {AVAILABLE_NODES}")
+
+    # 6. Execute via Proxmox client for the target node
     try:
-        client = ProxmoxClient(
-            host=settings.proxmox_host,
-            port=settings.proxmox_port,
-            token_id=settings.proxmox_token_id,
-            token_secret=settings.proxmox_token_secret,
-            verify_tls=settings.verify_tls
-        )
+        node_entry = NODE_REGISTRY[target_node]
+        client = node_entry["client"]
 
-        result = await client.execute(request.method, request.params)
+        # Remove node from params (it's in the path, not query params)
+        params = dict(request.params) if request.params else {}
+        params.pop("node", None)
 
-        logger.info(f"Operation '{request.method}' completed successfully")
+        result = await client.execute(request.method, params)
+
+        logger.info(f"Operation '{request.method}' on node '{target_node}' completed successfully")
 
         return MCPResponse(success=True, data=result, operation=request.method)
 
@@ -252,6 +382,31 @@ async def list_operations(authorization: str = Header(None)):
         "total_admin_only": len(ADMIN_ONLY_OPS)
     }
 
+@app.get("/mcp/v1/nodes", tags=["MCP"])
+async def list_nodes():
+    """List all available Proxmox nodes and their connection status."""
+    node_status = []
+    for node_name, node_entry in NODE_REGISTRY.items():
+        config = node_entry["config"]
+        status = "unknown"
+        try:
+            await node_entry["client"].ping()
+            status = "connected"
+        except Exception as e:
+            status = f"error: {str(e)[:50]}"
+
+        node_status.append({
+            "name": node_name,
+            "host": config.host,
+            "port": config.port,
+            "status": status
+        })
+
+    return {
+        "nodes": node_status,
+        "total": len(node_status)
+    }
+
 # ============================================================
 # Health & Status Endpoints
 # ============================================================
@@ -262,32 +417,36 @@ async def health_check():
     return HealthResponse(
         status="healthy",
         timestamp=datetime.utcnow().isoformat(),
-        version="1.0.0"
+        version="1.1.0",
+        nodes=AVAILABLE_NODES
     )
 
 @app.get("/ready", tags=["Health"])
 async def readiness_check():
-    """Readiness check - verify Proxmox connectivity."""
-    try:
-        client = ProxmoxClient(
-            host=settings.proxmox_host,
-            port=settings.proxmox_port,
-            token_id=settings.proxmox_token_id,
-            token_secret=settings.proxmox_token_secret
-        )
-        await client.ping()
-        return {"ready": True, "proxmox": "connected"}
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Proxmox not reachable: {str(e)}")
+    """Readiness check - verify Proxmox connectivity for all nodes."""
+    results = {}
+    for node_name, node_entry in NODE_REGISTRY.items():
+        try:
+            client = node_entry["client"]
+            await client.ping()
+            results[node_name] = "connected"
+        except Exception as e:
+            results[node_name] = f"error: {str(e)[:50]}"
+
+    all_connected = all("connected" in s for s in results.values())
+    if all_connected:
+        return {"ready": True, "nodes": results}
+    raise HTTPException(status_code=503, detail=f"Proxmox nodes not fully reachable: {results}")
 
 @app.get("/", tags=["Root"])
 async def root():
     """Root endpoint with server info."""
     return {
         "service": "Proxmox MCP Server",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
+        "nodes": AVAILABLE_NODES
     }
 
 # ============================================================
@@ -350,13 +509,14 @@ def get_user_role(username: str) -> str:
 @app.on_event("startup")
 async def startup_event():
     logger.info("Proxmox MCP Server starting up...")
-    logger.info(f"Configured Proxmox host: {settings.proxmox_host}")
+    logger.info(f"Version: 1.1.0 (Multi-Host Support)")
+    logger.info(f"Available nodes: {AVAILABLE_NODES}")
     logger.info(f"Allowed operations: {len(ALLOWED_OPS)}")
-
+    
     if not settings.jwt_secret:
         logger.error("JWT_SECRET not configured!")
-    if not settings.proxmox_token_id:
-        logger.error("PROXMOX_TOKEN_ID not configured!")
+    if not settings.proxmox_token_id and not settings.proxmox_node_tokens:
+        logger.error("No Proxmox token configured (PROXMOX_TOKEN_ID or PROXMOX_NODE_TOKENS)")
     if len(settings.jwt_secret) < 32:
         logger.warning("JWT_SECRET is shorter than recommended 32 characters")
 
