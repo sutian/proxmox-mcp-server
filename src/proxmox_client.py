@@ -19,7 +19,7 @@ OPERATION_ENDPOINTS = {
     # VM operations
     "vm.list": {
         "method": "GET",
-        "path": "/nodes/pve13/qemu",
+        "path": "/nodes/{node}/qemu",
         "params": {}
     },
     "vm.status": {

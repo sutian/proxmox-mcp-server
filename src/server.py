@@ -350,10 +350,7 @@ async def mcp_call(
         node_entry = NODE_REGISTRY[target_node]
         client = node_entry["client"]
 
-        # Remove node from params (it's in the path, not query params)
         params = dict(request.params) if request.params else {}
-        params.pop("node", None)
-
         result = await client.execute(request.method, params)
 
         logger.info(f"Operation '{request.method}' on node '{target_node}' completed successfully")
