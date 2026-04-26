@@ -152,6 +152,21 @@ OPERATION_ENDPOINTS = {
         "path": "/cluster/resources",
         "params": {}
     },
+    "cluster.status": {
+        "method": "GET",
+        "path": "/cluster/status",
+        "params": {}
+    },
+    "cluster.config": {
+        "method": "GET",
+        "path": "/cluster/config",
+        "params": {}
+    },
+    "vm.migrate": {
+        "method": "POST",
+        "path": "/nodes/{node}/qemu/{vmid}/migrate",
+        "params": {}
+    },
     "cluster.config": {
         "method": "GET",
         "path": "/cluster/config",
