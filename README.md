@@ -21,7 +21,7 @@ A secure Model Context Protocol (MCP) server for managing Proxmox VE infrastruct
 
 ### 2. Create Proxmox API Token
 
-On your Proxmox node:
+On each Proxmox node:
 
 ```bash
 # Create dedicated user
@@ -35,7 +35,7 @@ pveum role add MCP-Operator -privs \
   Datastore.Audit \
   Sys.Audit
 
-# Create token
+# Create token for each node
 pveum token add mcp-service@pve mcp-token --privsep 0
 
 # Grant role to user
@@ -56,20 +56,36 @@ cp .env.example .env
 nano .env
 ```
 
+#### Multi-Host Configuration
+
+For managing multiple Proxmox nodes:
+
+```bash
+# Format: node_name:host:port,node_name:host:port
+PROXMOX_NODES=pve11:192.168.1.11:8006,pve12:192.168.1.12:8006,pve13:192.168.1.13:8006
+
+# Per-node token overrides (node_name=token_id:token_secret,...)
+# If not specified, falls back to PROXMOX_TOKEN_ID/SECRET
+PROXMOX_NODE_TOKENS=pve11:root@pam!api-token-pve11:xxxxxxxx,pve12:root@pam!api-token-pve12:xxxxxxxx,pve13:root@pam!api-token-pve13:xxxxxxxx
+```
+
 Required environment variables:
 
 | Variable | Description |
 |----------|-------------|
 | `PROXMOX_NODES` | Multi-host config (node:host:port,...) |
-| `PROXMOX_TOKEN_ID` | API token ID |
-| `PROXMOX_TOKEN_SECRET` | API token secret |
+| `PROXMOX_TOKEN_ID` | API token ID (fallback if per-node not set) |
+| `PROXMOX_TOKEN_SECRET` | API token secret (fallback if per-node not set) |
+| `PROXMOX_NODE_TOKENS` | Per-node token overrides |
 | `JWT_SECRET` | JWT signing secret (min 32 chars) |
+| `ADMIN_PASSWORD` | Password for admin user |
+| `VERIFY_TLS` | Verify TLS certs (default: false for self-signed) |
 
 ### 4. Deploy
 
 ```bash
 # Build and start
-docker-compose up -d
+docker-compose up -d --build
 
 # Check logs
 docker-compose logs -f
@@ -80,21 +96,20 @@ curl http://localhost:8000/health
 
 ### 5. Connect Client
 
-Example Claude Desktop configuration in `claude_desktop_config.json`:
+Example request:
 
-```json
-{
-  "mcpServers": {
-    "proxmox": {
-      "command": "docker",
-      "args": ["exec", "-i", "proxmox-mcp", "python", "-m", "mcp.client"],
-      "env": {
-        "MCP_HOST": "localhost:8000",
-        "MCP_TOKEN": "your-jwt-token-here"
-      }
-    }
-  }
-}
+```bash
+# Get JWT token
+TOKEN=$(curl -s -X POST http://localhost:8000/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"P@ssw0rd"}' | \
+  python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])')
+
+# List VMs on specific node
+curl -X POST http://localhost:8000/mcp/v1/call \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"method":"vm.list","params":{"node":"pve11"},"resource":"*/qemu/*"}'
 ```
 
 ## Security Features
@@ -125,7 +140,7 @@ Client                    MCP Server                Proxmox
    │◀─── Result ──────────────│                        │
 ```
 
-1. Client authenticates via external IdP
+1. Client authenticates via `/auth/token` endpoint
 2. Client receives short-lived JWT (15 min)
 3. Client calls MCP endpoint with JWT
 4. MCP validates token, checks RBAC
@@ -136,10 +151,14 @@ Client                    MCP Server                Proxmox
 ### Authentication
 
 ```bash
-# Get access token (external IdP would issue this)
+# Get access token
 curl -X POST http://localhost:8000/auth/token \
   -H "Content-Type: application/json" \
-  -d '{"username": "user@example.com", "password": "..."}'
+  -d '{"username": "admin", "password": "P@ssw0rd"}'
+
+# Refresh token
+curl -X POST http://localhost:8000/auth/refresh \
+  -H "Authorization: Bearer <expired_token>"
 ```
 
 ### MCP Operations
@@ -147,14 +166,14 @@ curl -X POST http://localhost:8000/auth/token \
 All operations require `Authorization: Bearer <jwt>` header.
 
 ```bash
-# List VMs
+# List VMs on specific node (params.node is required for multi-host)
 curl -X POST http://localhost:8000/mcp/v1/call \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
     "method": "vm.list",
-    "params": {},
-    "resource": "/cluster/resources"
+    "params": {"node": "pve11"},
+    "resource": "*/qemu/*"
   }'
 
 # Get VM status
@@ -164,7 +183,7 @@ curl -X POST http://localhost:8000/mcp/v1/call \
   -d '{
     "method": "vm.status",
     "params": {"node": "pve11", "vmid": "501"},
-    "resource": "/nodes/pve11/qemu/501/status/current"
+    "resource": "*/qemu/*"
   }'
 
 # Start VM
@@ -174,7 +193,27 @@ curl -X POST http://localhost:8000/mcp/v1/call \
   -d '{
     "method": "vm.start",
     "params": {"node": "pve11", "vmid": "501"},
-    "resource": "/nodes/pve11/qemu/501/status/start"
+    "resource": "*/qemu/*"
+  }'
+
+# Get VM snapshots
+curl -X POST http://localhost:8000/mcp/v1/call \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "method": "vm.snapshot",
+    "params": {"node": "pve11", "vmid": "501"},
+    "resource": "*/qemu/*"
+  }'
+
+# Node status
+curl -X POST http://localhost:8000/mcp/v1/call \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "method": "node.status",
+    "params": {"node": "pve11"},
+    "resource": "*/node/*"
   }'
 ```
 
@@ -182,11 +221,14 @@ curl -X POST http://localhost:8000/mcp/v1/call \
 
 | Operation | Description | Risk Level |
 |-----------|-------------|------------|
-| `vm.list` | List all VMs | Low |
+| `vm.list` | List all VMs on a node | Low |
 | `vm.status` | Get VM status | Low |
+| `vm.snapshot` | List VM snapshots | Low |
 | `vm.start` | Start a VM | Medium |
 | `vm.stop` | Stop a VM (hard) | Medium |
 | `vm.shutdown` | Graceful shutdown | Medium |
+| `vm.create` | Create VM (admin only) | High |
+| `vm.clone` | Clone VM (admin only) | High |
 | `node.list` | List cluster nodes | Low |
 | `node.status` | Get node status | Low |
 | `storage.list` | List storage | Low |
@@ -195,12 +237,32 @@ curl -X POST http://localhost:8000/mcp/v1/call \
 
 ### Denied Operations (Blacklist)
 
-These operations are always blocked:
+These operations are always blocked regardless of role:
 
 - `vm.delete` / `vm.destroy`
-- `node.stop` / `node.reboot`
-- `cluster.aclmodify`
-- `user.modify`
+- `node.stop` / `node.reboot` / `node.shutdown`
+- `cluster.*` (all cluster operations)
+- `user.*` (all user operations)
+- `storage.*` (modify/delete)
+- `pool.*` (all pool operations)
+- `vzdump.restore` / `vzdump.backup`
+
+## Multi-Host Usage
+
+When `PROXMOX_NODES` is configured, specify the target node in `params.node`:
+
+```bash
+# pve11
+curl ... -d '{"method":"vm.list","params":{"node":"pve11"},...}'
+
+# pve12
+curl ... -d '{"method":"vm.list","params":{"node":"pve12"},...}'
+
+# pve13
+curl ... -d '{"method":"vm.list","params":{"node":"pve13"},...}'
+```
+
+If `node` is omitted, defaults to the first node in `PROXMOX_NODES`.
 
 ## Development
 
@@ -345,25 +407,32 @@ spec:
 **401 Unauthorized**
 - Check JWT token hasn't expired (15 min default)
 - Verify token signature matches JWT_SECRET
+- Ensure `params.node` is specified for multi-host setup
 
 **403 Forbidden**
 - Operation may be blacklisted
 - User may not have permission for requested resource
+- Some operations (vm.create, vm.clone) require admin role
 
 **Connection to Proxmox failed**
-- Verify PROXMOX_HOST is accessible from container
-- Check Proxmox API port (8006) is not blocked
-- Ensure API token is valid
+- Verify `PROXMOX_NODES` is correctly formatted
+- Check each node's API port (8006) is accessible
+- Ensure API tokens are valid for each node
 
 **Certificate verify failed**
-- For self-signed certs, add to container's CA store
-- Or set `TLS_VERIFY=false` (not recommended for production)
+- Set `VERIFY_TLS=false` for self-signed certs (default)
+- For production, add CA bundle or use valid certs
+
+**Unknown node errors**
+- Verify node name matches exactly (case-sensitive)
+- Check `PROXMOX_NODES` format: `name:host:port,name:host:port`
+- Ensure node is reachable from container
 
 ### Debug Mode
 
 ```bash
 # Enable debug logging
-echo "LOG_LEVEL=DEBUG" >> .env
+sed -i 's/LOG_LEVEL=.*/LOG_LEVEL=DEBUG/' .env
 docker-compose restart
 
 # View verbose logs
@@ -378,6 +447,19 @@ docker exec -it proxmox-mcp /bin/sh
 
 # Check Python environment
 docker exec proxmox-mcp python -c "import sys; print(sys.version)"
+
+# Test Proxmox connectivity directly
+docker exec proxmox-mcp python -c "
+from src.proxmox_client import ProxmoxClient
+import asyncio
+async def test():
+    client = ProxmoxClient(host='192.168.1.11', port=8006,
+                          token_id='root@pam!token', token_secret='xxx',
+                          verify_tls=False)
+    result = await client.ping()
+    print('Ping:', result)
+asyncio.run(test())
+"
 ```
 
 ## License
@@ -386,4 +468,4 @@ MIT
 
 ## Author
 
-OxTigger - Proxmox MCP Server v1.0.0
+OxTigger - Proxmox MCP Server v1.1.0
