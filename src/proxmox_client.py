@@ -358,12 +358,20 @@ class ProxmoxClient:
         for key in path_keys:
             all_params.pop(key, None)
         
-        # Make request
-        response = await self._request(
-            method=op_config["method"],
-            path=path,
-            params=all_params if all_params else None
-        )
+        # Make request - POST sends params as form data (dict), GET as query params
+        if op_config["method"] == "POST":
+            # Proxmox API expects form-encoded data
+            response = await self._request(
+                method=op_config["method"],
+                path=path,
+                data=all_params if all_params else {}
+            )
+        else:
+            response = await self._request(
+                method=op_config["method"],
+                path=path,
+                params=all_params if all_params else None
+            )
         
         # Extract data from Proxmox response format
         if "data" in response:
