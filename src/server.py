@@ -85,6 +85,13 @@ class Settings(BaseSettings):
         env_file = ".env"
         extra = "ignore"
 
+
+# ============================================================
+# Early logger init (parse_proxmox_nodes uses logger before settings = Settings())
+# ============================================================
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger("proxmox-mcp")
+
 settings = Settings()
 
 # ============================================================
@@ -153,12 +160,8 @@ def build_node_registry() -> dict:
 NODE_REGISTRY = build_node_registry()
 AVAILABLE_NODES = list(NODE_REGISTRY.keys())
 
-# Logging
-logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper()),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger("proxmox-mcp")
+# Logging (update level from settings after settings is available)
+logging.getLogger("proxmox-mcp").setLevel(getattr(logging, settings.log_level.upper()))
 
 # FastAPI app
 app = FastAPI(
