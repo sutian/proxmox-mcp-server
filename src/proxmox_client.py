@@ -194,6 +194,11 @@ OPERATION_ENDPOINTS = {
         "method": "GET",
         "path": "/cluster/acl",
         "params": {}
+    },
+    "cluster.members": {
+        "method": "GET",
+        "path": "/cluster/members",
+        "params": {}
     }
 }
 
@@ -438,6 +443,10 @@ class ProxmoxClient:
     async def get_cluster_status(self) -> Dict[str, Any]:
         """Get cluster status."""
         return await self.execute("cluster.status")
+
+    async def get_cluster_members(self) -> List[Dict[str, Any]]:
+        """Get cluster member nodes."""
+        return await self.execute("cluster.members")
 
 
 class SyncProxmoxClient(ProxmoxClient):

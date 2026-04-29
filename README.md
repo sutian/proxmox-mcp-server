@@ -56,9 +56,26 @@ cp .env.example .env
 nano .env
 ```
 
-#### Multi-Host Configuration
+#### Cluster Features
 
-For managing multiple Proxmox nodes:
+For Proxmox clusters, the server supports automatic node discovery and cluster-wide operations:
+
+```bash
+# GET /mcp/v1/cluster/members — auto-discover all cluster nodes
+curl http://localhost:8000/mcp/v1/cluster/members \
+  -H "Authorization: Bearer $TOKEN"
+# Returns all cluster members with status (no need to configure each node manually)
+```
+
+Cluster-wide operations (no `--node` flag needed):
+- `cluster.resources` — all VMs/storage across cluster
+- `cluster.members` — discover cluster nodes
+- `cluster.status` — HA cluster status
+- `cluster.config` — cluster configuration
+- `storage.list` — all storage backends
+- `backup.list` — all backup jobs
+
+#### Per-Node Configuration
 
 ```bash
 # Format: node_name:host:port,node_name:host:port

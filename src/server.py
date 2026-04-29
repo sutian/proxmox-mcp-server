@@ -176,7 +176,7 @@ class Settings(BaseSettings):
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     verify_tls: bool = os.getenv("VERIFY_TLS", "true").lower() == "true"
     allowed_operations: str = os.getenv("ALLOWED_OPERATIONS",
-        "vm.list,vm.status,vm.start,vm.stop,vm.shutdown,vm.create,vm.clone,vm.migrate,node.list,node.status,storage.list,backup.list,backup.status")
+        "vm.list,vm.status,vm.start,vm.stop,vm.shutdown,vm.create,vm.clone,vm.migrate,node.list,node.status,storage.list,backup.list,backup.status,cluster.resources,cluster.members")
 
     class Config:
         env_file = ".env"
@@ -326,6 +326,12 @@ DENIED_OPS = frozenset({
     "vzdump.restore", "vzdump.backup"
 })
 
+# Cluster-wide operations (no node parameter needed)
+CLUSTER_WIDE_OPS = frozenset({
+    "cluster.resources", "cluster.members", "cluster.status",
+    "cluster.config", "cluster.acl", "storage.list", "backup.list"
+})
+
 # Admin-only operations (allowed but requires admin role)
 ADMIN_ONLY_OPS = frozenset({
     "vm.create", "vm.clone", "vm.modify", "vm.reset",
@@ -440,13 +446,23 @@ async def mcp_call(
         raise HTTPException(status_code=403, detail="Access denied to this resource")
 
     # 5. Determine target node (resolve from params.node)
+    # Cluster-wide ops don't require a specific node
     target_node = request.params.get("node") if request.params else None
     if not target_node:
-        if AVAILABLE_NODES:
-            target_node = AVAILABLE_NODES[0]
-            logger.debug(f"No target node specified, defaulting to '{target_node}'")
+        if request.method not in CLUSTER_WIDE_OPS:
+            # Node-specific op needs explicit node
+            if AVAILABLE_NODES:
+                target_node = AVAILABLE_NODES[0]
+                logger.debug(f"No target node specified, defaulting to '{target_node}'")
+            else:
+                raise HTTPException(status_code=503, detail="No Proxmox nodes configured")
         else:
-            raise HTTPException(status_code=503, detail="No Proxmox nodes configured")
+            # Cluster-wide op: use first available node for routing
+            if AVAILABLE_NODES:
+                target_node = AVAILABLE_NODES[0]
+                logger.debug(f"Cluster-wide op '{request.method}': routing via '{target_node}'")
+            else:
+                raise HTTPException(status_code=503, detail="No Proxmox nodes configured")
     elif target_node not in NODE_REGISTRY:
         raise HTTPException(status_code=400, detail=f"Unknown node '{target_node}'. Available: {AVAILABLE_NODES}")
 
@@ -516,6 +532,49 @@ async def list_nodes():
         "nodes": node_status,
         "total": len(node_status)
     }
+
+@app.get("/mcp/v1/cluster/members", tags=["MCP"])
+async def get_cluster_members(authorization: str = Header(None)):
+    """
+    Auto-discover cluster members by querying /cluster/members.
+    Returns all nodes in the Proxmox cluster with their status.
+    Requires valid JWT token.
+    """
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing authorization header")
+
+    token = authorization.replace("Bearer ", "")
+    claims = verify_token(token)
+    if not claims:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    if not AVAILABLE_NODES:
+        raise HTTPException(status_code=503, detail="No Proxmox nodes configured")
+
+    # Use first node to query cluster membership
+    first_node = AVAILABLE_NODES[0]
+    client = NODE_REGISTRY[first_node]["client"]
+
+    try:
+        members = await client.get_cluster_members()
+        # Enrich with node info from our registry
+        enriched = []
+        for member in (members or []):
+            node_name = member.get("node_name") or member.get("name", "")
+            # Add connection status from our registry if available
+            if node_name in NODE_REGISTRY:
+                member["_registry_status"] = "configured"
+            else:
+                member["_registry_status"] = "discovered"
+            enriched.append(member)
+        return {
+            "members": enriched,
+            "total": len(enriched),
+            "queried_via": first_node
+        }
+    except Exception as e:
+        logger.error(f"Failed to get cluster members: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Cluster query failed: {str(e)}")
 
 # ============================================================
 # Health & Status Endpoints
