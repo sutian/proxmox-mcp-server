@@ -1,6 +1,6 @@
 # Proxmox MCP Server
 
-A secure Model Context Protocol (MCP) server for managing Proxmox VE infrastructure via Docker.
+A secure Model Context Protocol (MCP) server for managing Proxmox VE infrastructure via Docker with multi-host support.
 
 ## Features
 
