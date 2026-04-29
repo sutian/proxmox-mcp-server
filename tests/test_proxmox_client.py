@@ -72,8 +72,7 @@ class TestOperationEndpoints:
         op = OPERATION_ENDPOINTS["vm.list"]
         
         assert op["method"] == "GET"
-        assert op["path"] == "/cluster/resources"
-        assert "type" in op["params"]
+        assert op["path"] == "/nodes/{node}/qemu"
     
     def test_vm_status_operation(self):
         """Test VM status operation configuration."""

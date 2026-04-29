@@ -364,7 +364,7 @@ class ProxmoxClient:
         all_params = {**op_config.get("params", {}), **(params or {})}
         
         # Remove path parameters from query params
-        path_keys = [k for k in params.keys() if f"{{{k}}}" in op_config["path"]]
+        path_keys = [k for k in (params or {}).keys() if f"{{{k}}}" in op_config["path"]]
         for key in path_keys:
             all_params.pop(key, None)
         

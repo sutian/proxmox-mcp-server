@@ -195,8 +195,21 @@ def match_resource_pattern(pattern: str, resource: str) -> bool:
     # Wildcard prefix matching
     if pattern.startswith("*/"):
         suffix = pattern[2:]  # Remove */
-        if resource.endswith(suffix) or resource == suffix:
-            return True
+        # Handle suffix with wildcard at end (e.g., "qemu/*")
+        if "/*" in suffix:
+            suffix_parts = suffix.split("/*", 1)
+            suffix_path = suffix_parts[0]  # e.g., "qemu"
+            # Check if /{suffix_path}/ is in the resource and has content after
+            marker = "/" + suffix_path + "/"
+            if marker in resource:
+                return True
+            # Also check if resource ends with /{suffix_path} (no trailing content)
+            if resource.endswith("/" + suffix_path):
+                return True
+        else:
+            # No wildcard at end, simple suffix match
+            if resource.endswith(suffix) or resource == suffix:
+                return True
     
     return False
 
@@ -330,11 +343,12 @@ def log_auth_event(
 
 def validate_jwt_secret() -> bool:
     """Validate that JWT_SECRET is properly configured."""
-    if not JWT_SECRET:
+    secret = os.getenv("JWT_SECRET", "")
+    if not secret:
         logger.error("JWT_SECRET environment variable not set!")
         return False
     
-    if len(JWT_SECRET) < 32:
+    if len(secret) < 32:
         logger.warning("JWT_SECRET is shorter than recommended 32 characters")
         return False
     
