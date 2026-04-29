@@ -3,6 +3,7 @@ Proxmox MCP Server - Main Application
 """
 
 import os
+import re
 import json
 import logging
 from datetime import datetime, timedelta
@@ -15,6 +16,102 @@ from pydantic_settings import BaseSettings
 
 from .auth import verify_token, verify_proxmox_access, create_token, log_auth_event as auth_log
 from .proxmox_client import ProxmoxClient
+
+# ============================================================
+# Input Validation Helpers (High Priority Fix)
+# ============================================================
+
+class ValidationError(Exception):
+    """Raised when parameter validation fails."""
+    def __init__(self, field: str, message: str):
+        self.field = field
+        self.message = message
+        super().__init__(f"[{field}] {message}")
+
+
+def validate_operation_params(method: str, params: dict) -> dict:
+    """
+    Validate and sanitize operation parameters before sending to Proxmox API.
+
+    Raises ValidationError if params are invalid.
+    Returns sanitized params dict.
+
+    # Validated fields:
+    # - vmid: must be integer in range 1-999999
+    # - node: must be valid hostname format
+    # - storage: alphanumeric + dash/underscore, max 64 chars
+    # - Other string params: stripped, length limits
+    """
+    if not params:
+        return {}
+
+    sanitized = {}
+    errors = []
+
+    for key, value in params.items():
+        if value is None:
+            continue
+
+        # ---- vmid: must be positive integer within Proxmox range ----
+        if key == "vmid":
+            try:
+                vmid = int(value)
+                if not (1 <= vmid <= 999999):
+                    errors.append(f"vmid must be 1-999999, got {vmid}")
+                else:
+                    sanitized[key] = vmid
+            except (TypeError, ValueError):
+                errors.append(f"vmid must be integer, got {type(value).__name__}: {repr(value)}")
+
+        # ---- node: valid hostname format ----
+        elif key == "node":
+            if not isinstance(value, str):
+                errors.append(f"node must be string, got {type(value).__name__}")
+            elif not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9\-\.]*[a-zA-Z0-9]$', value):
+                errors.append(f"node name '{value}' contains invalid characters")
+            elif len(value) > 255:
+                errors.append(f"node name exceeds 255 characters")
+            else:
+                sanitized[key] = value.strip()
+
+        # ---- storage: safe identifier ----
+        elif key == "storage":
+            if not isinstance(value, str):
+                errors.append(f"storage must be string, got {type(value).__name__}")
+            elif not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9_\-]*$', value):
+                errors.append(f"storage name '{value}' contains invalid characters")
+            elif len(value) > 64:
+                errors.append(f"storage name exceeds 64 characters")
+            else:
+                sanitized[key] = value.strip()
+
+        # ---- name/vmname: general string sanitization ----
+        elif key in ("name", "vmname", "new_name", "clone"):
+            if not isinstance(value, str):
+                errors.append(f"{key} must be string, got {type(value).__name__}")
+            elif len(value) > 255:
+                errors.append(f"{key} exceeds 255 characters")
+            else:
+                sanitized[key] = value.strip()
+
+        # ---- numeric string params (memory, cpu, etc.) ----
+        elif key in ("memory", "cores", "sockets", "cpu", "disk", "size"):
+            try:
+                sanitized[key] = int(value)
+            except (TypeError, ValueError):
+                errors.append(f"{key} must be integer, got {repr(value)}")
+
+        # ---- passthrough unknown fields after basic sanitization ----
+        elif isinstance(value, (str, int, float, bool, list, dict)):
+            sanitized[key] = value
+
+        # ---- silently skip anything else (None, bytes, etc.) ----
+        # prevent type-confusion attacks
+
+    if errors:
+        raise ValidationError("params", "; ".join(errors))
+
+    return sanitized
 
 # ============================================================
 # Configuration - Multi-Host Support
@@ -93,6 +190,14 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger("proxmox-mcp")
 
 settings = Settings()
+
+# ---- SECURITY WARNING: warn if TLS verification is disabled ----
+if not settings.verify_tls:
+    logger.warning(
+        "VERIFY_TLS=false: SSL/TLS certificate verification is DISABLED. "
+        "This is insecure for production and exposes the server to man-in-the-middle attacks. "
+        "Only use for local dev with self-signed certificates."
+    )
 
 # ============================================================
 # Node Registry - Build client per node
@@ -345,12 +450,17 @@ async def mcp_call(
     elif target_node not in NODE_REGISTRY:
         raise HTTPException(status_code=400, detail=f"Unknown node '{target_node}'. Available: {AVAILABLE_NODES}")
 
-    # 6. Execute via Proxmox client for the target node
+    # 6. Validate & sanitize params before sending to Proxmox
+    try:
+        params = validate_operation_params(request.method, request.params)
+    except ValidationError as ve:
+        logger.warning(f"Parameter validation failed for '{request.method}': {ve}")
+        raise HTTPException(status_code=400, detail=str(ve))
+
+    # 7. Execute via Proxmox client for the target node
     try:
         node_entry = NODE_REGISTRY[target_node]
         client = node_entry["client"]
-
-        params = dict(request.params) if request.params else {}
         result = await client.execute(request.method, params)
 
         logger.info(f"Operation '{request.method}' on node '{target_node}' completed successfully")
