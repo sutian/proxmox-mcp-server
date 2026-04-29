@@ -157,6 +157,11 @@ OPERATION_ENDPOINTS = {
         "path": "/cluster/config",
         "params": {}
     },
+    "vm.migrate": {
+        "method": "POST",
+        "path": "/nodes/{node}/qemu/{vmid}/migrate",
+        "params": {}
+    },
     
     # Network operations
     "network.list": {

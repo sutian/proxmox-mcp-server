@@ -176,7 +176,7 @@ class Settings(BaseSettings):
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     verify_tls: bool = os.getenv("VERIFY_TLS", "true").lower() == "true"
     allowed_operations: str = os.getenv("ALLOWED_OPERATIONS",
-        "vm.list,vm.status,vm.start,vm.stop,vm.shutdown,vm.create,vm.clone,node.list,node.status,storage.list,backup.list,backup.status")
+        "vm.list,vm.status,vm.start,vm.stop,vm.shutdown,vm.create,vm.clone,vm.migrate,node.list,node.status,storage.list,backup.list,backup.status")
 
     class Config:
         env_file = ".env"
