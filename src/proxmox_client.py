@@ -197,7 +197,7 @@ OPERATION_ENDPOINTS = {
     },
     "cluster.members": {
         "method": "GET",
-        "path": "/cluster/members",
+        "path": "/cluster/status",
         "params": {}
     }
 }
