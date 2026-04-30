@@ -16,7 +16,7 @@ A secure Model Context Protocol (MCP) server for managing Proxmox VE infrastruct
 ### 1. Prerequisites
 
 - Docker & Docker Compose
-- Proxmox VE 7.x or 8.x
+- Proxmox VE 8.x or 9.x
 - Python 3.12+ (for local development)
 
 ### 2. Create Proxmox API Token
@@ -79,7 +79,7 @@ Cluster-wide operations (no `--node` flag needed):
 
 ```bash
 # Format: node_name:host:port,node_name:host:port
-PROXMOX_NODES=pve11:192.168.1.11:8006,pve12:192.168.1.12:8006,pve13:192.168.1.13:8006
+PROXMOX_NODES=pve11:IP_11:8006,pve12:IP_12:8006,pve13:IP_13:8006
 
 # Per-node token overrides (node_name=token_id:token_secret,...)
 # If not specified, falls back to PROXMOX_TOKEN_ID/SECRET
@@ -485,4 +485,4 @@ MIT
 
 ## Author
 
-OxTigger - Proxmox MCP Server v1.1.0
+Sutian - Proxmox MCP Server v1.1.0
